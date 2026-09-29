@@ -4,6 +4,7 @@ import { distanceKm } from "../../domain/zones.js";
 import { AppError } from "../../errors/AppError.js";
 import { prisma } from "../../lib/prisma.js";
 import type { CancelRideInput, CreateRideInput, ListRidesInput } from "./rides.schemas.js";
+import { autoMatchRide, recalculatePoolFares } from "./pooling.service.js";
 
 const rideSelect = {
   id: true,
@@ -52,7 +53,7 @@ export async function createRide(passengerId: string, input: CreateRideInput) {
         seats: input.seats,
         pooled: false,
       }).total;
-      const ride = await tx.rideRequest.create({
+      let ride = await tx.rideRequest.create({
         data: {
           passengerId,
           pickupZoneId: input.pickupZoneId,
@@ -72,6 +73,14 @@ export async function createRide(passengerId: string, input: CreateRideInput) {
           toStatus: "REQUESTED",
         },
       });
+      await autoMatchRide(tx, {
+        id: ride.id,
+        passengerId,
+        pickupZoneId: input.pickupZoneId,
+        dropoff: dropoff,
+        seats: input.seats,
+      });
+      ride = await tx.rideRequest.findUniqueOrThrow({ where: { id: ride.id }, select: rideSelect });
       return toRide(ride);
     });
   } catch (err) {
@@ -115,17 +124,77 @@ export async function getRide(passengerId: string, rideId: string) {
   return ride;
 }
 
+export async function getActiveRide(passengerId: string) {
+  const ride = await prisma.rideRequest.findFirst({
+    where: { passengerId, status: { in: ["REQUESTED", "MATCHED", "IN_PROGRESS"] } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      ...rideSelect,
+      memberships: {
+        where: { leftAt: null },
+        select: {
+          pool: {
+            select: {
+              status: true,
+              driver: { select: { name: true } },
+              vehicle: { select: { name: true } },
+              members: { where: { leftAt: null }, select: { id: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!ride) return null;
+
+  const pool = ride.memberships[0]?.pool;
+  return {
+    ...ride,
+    pool: pool
+      ? {
+          status: pool.status,
+          driver: pool.driver,
+          vehicle: pool.vehicle,
+          coRiderCount: Math.max(0, pool.members.length - 1),
+          myFarePaisa: ride.finalFarePaisa ?? ride.estimatedFarePaisa,
+        }
+      : null,
+  };
+}
+
 export async function cancelRide(passengerId: string, rideId: string, input: CancelRideInput) {
   return prisma.$transaction(async (tx) => {
     const ride = await tx.rideRequest.findFirst({
       where: { id: rideId, passengerId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, memberships: { where: { leftAt: null }, select: { id: true, poolId: true, seats: true, pool: { select: { status: true } } } } },
     });
     if (!ride) {
       throw new AppError(404, "NOT_FOUND", "Ride request not found");
     }
     if (ride.status !== "REQUESTED" && ride.status !== "MATCHED") {
       throw new AppError(409, "INVALID_RIDE_STATE", `Ride cannot be cancelled while ${ride.status}`);
+    }
+
+    const membership = ride.memberships[0];
+    if (membership) {
+      if (membership.pool.status !== "ACCEPTED" && membership.pool.status !== "DRIVER_ARRIVED") {
+        throw new AppError(409, "INVALID_RIDE_STATE", "Ride cannot be cancelled after the trip has started");
+      }
+      await tx.poolMember.update({ where: { id: membership.id }, data: { leftAt: new Date() } });
+      await tx.$executeRaw`
+        UPDATE pools
+        SET seats_occupied = seats_occupied - ${membership.seats}
+        WHERE id = ${membership.poolId}::uuid
+      `;
+      const remaining = await tx.poolMember.count({ where: { poolId: membership.poolId, leftAt: null } });
+      if (remaining === 0) {
+        await tx.pool.update({ where: { id: membership.poolId }, data: { status: "CANCELLED", cancelledAt: new Date() } });
+        await tx.rideEvent.create({
+          data: { poolId: membership.poolId, actorId: passengerId, type: "POOL_CANCELLED", fromStatus: membership.pool.status, toStatus: "CANCELLED" },
+        });
+      } else {
+        await recalculatePoolFares(tx, membership.poolId);
+      }
     }
 
     const cancelledAt = new Date();
