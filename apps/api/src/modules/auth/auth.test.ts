@@ -7,7 +7,15 @@ const app = createApp();
 
 describe("auth", () => {
   beforeEach(async () => {
-    await prisma.user.deleteMany();
+    await prisma.$transaction([
+      prisma.payment.deleteMany(),
+      prisma.rideEvent.deleteMany(),
+      prisma.poolMember.deleteMany(),
+      prisma.rideRequest.deleteMany(),
+      prisma.pool.deleteMany(),
+      prisma.vehicle.deleteMany(),
+      prisma.user.deleteMany(),
+    ]);
   });
 
   it("registers, logs in, and fetches /me", async () => {
