@@ -159,8 +159,12 @@ service. Every state change runs inside a transaction and writes a
 - ✅ **Phase 2** (`feature/database-schema`, merged): full Prisma schema, the
   two migrations (`init` + `integrity_constraints`), the idempotent seed
   script (`apps/api/prisma/seed.ts`).
-- ⬜ **Phase 3** `feature/passenger-auth`: register/login/me, JWT middleware,
-  role guard, rate limiting on `/api/auth/*`.
+- ✅ **Phase 3** (`feature/passenger-auth`, merged): register/login/me, JWT
+  middleware (`middleware/auth.ts`), role guard (`middleware/requireRole.ts`),
+  rate limiting on `/api/auth/*`, plus the general error-handling
+  infrastructure (`AppError`, central error handler, `validate()`,
+  zod-validated `config/env.ts`) and a dedicated `dhaka_tesla_pool_test`
+  Postgres database for integration tests (`.env.test`, `vitest.setup.ts`).
 - ⬜ **Phase 4** `feature/fare-model`: `domain/zones.ts`, `domain/fare.ts`,
   `domain/matching.ts`, `GET /api/zones`, `GET /api/fares/estimate`, unit
   tests against the worked fare/distance examples above.
