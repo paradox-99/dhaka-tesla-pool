@@ -64,3 +64,15 @@ export async function login(input: LoginInput) {
 
   return { token: signToken(user.id, user.role), user: toPublicUser(user) };
 }
+
+export async function getMe(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { vehicle: true },
+  });
+  if (!user) {
+    throw new AppError(404, "NOT_FOUND", "User not found");
+  }
+
+  return { ...toPublicUser(user), vehicle: user.vehicle ?? undefined };
+}
