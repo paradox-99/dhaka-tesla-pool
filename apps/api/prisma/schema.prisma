@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +8,182 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+}
+
+enum RideStatus {
+  REQUESTED
+  MATCHED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PoolStatus {
+  ACCEPTED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TESLAPAY
+}
+
+enum PaymentStatus {
+  PAID
+  FAILED
+}
+
+model User {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String
+  email              String   @unique
+  phone              String?  @unique
+  passwordHash       String   @map("password_hash")
+  role               Role
+  walletBalancePaisa Int      @default(0) @map("wallet_balance_paisa")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  vehicle      Vehicle?
+  rideRequests RideRequest[]
+  pools        Pool[]
+  events       RideEvent[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id          String  @id @default(uuid()) @db.Uuid
+  driverId    String  @unique @map("driver_id") @db.Uuid
+  name        String
+  plateNumber String  @unique @map("plate_number")
+  capacity    Int
+  isOnline    Boolean @default(false) @map("is_online")
+
+  driver User   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  pools  Pool[]
+
+  @@map("vehicles")
+}
+
+model Zone {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  x    Int
+  y    Int
+
+  pickups  RideRequest[] @relation("PickupZone")
+  dropoffs RideRequest[] @relation("DropoffZone")
+  pools    Pool[]
+
+  @@map("zones")
+}
+
+model RideRequest {
+  id                 String        @id @default(uuid()) @db.Uuid
+  passengerId        String        @map("passenger_id") @db.Uuid
+  pickupZoneId       Int           @map("pickup_zone_id")
+  dropoffZoneId      Int           @map("dropoff_zone_id")
+  seats              Int
+  distanceKm         Int           @map("distance_km")
+  status             RideStatus    @default(REQUESTED)
+  paymentMethod      PaymentMethod @default(CASH) @map("payment_method")
+  estimatedFarePaisa Int           @map("estimated_fare_paisa")
+  finalFarePaisa     Int?          @map("final_fare_paisa")
+  cancelReason       String?       @map("cancel_reason")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  completedAt        DateTime?     @map("completed_at")
+
+  passenger   User         @relation(fields: [passengerId], references: [id])
+  pickupZone  Zone         @relation("PickupZone", fields: [pickupZoneId], references: [id])
+  dropoffZone Zone         @relation("DropoffZone", fields: [dropoffZoneId], references: [id])
+  memberships PoolMember[]
+  events      RideEvent[]
+  payment     Payment?
+
+  @@index([passengerId, createdAt])
+  @@index([status, pickupZoneId])
+  @@map("ride_requests")
+}
+
+model Pool {
+  id            String     @id @default(uuid()) @db.Uuid
+  driverId      String     @map("driver_id") @db.Uuid
+  vehicleId     String     @map("vehicle_id") @db.Uuid
+  pickupZoneId  Int        @map("pickup_zone_id")
+  capacity      Int
+  seatsOccupied Int        @default(0) @map("seats_occupied")
+  status        PoolStatus @default(ACCEPTED)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  arrivedAt     DateTime?  @map("arrived_at")
+  startedAt     DateTime?  @map("started_at")
+  completedAt   DateTime?  @map("completed_at")
+  cancelledAt   DateTime?  @map("cancelled_at")
+
+  driver     User         @relation(fields: [driverId], references: [id])
+  vehicle    Vehicle      @relation(fields: [vehicleId], references: [id])
+  pickupZone Zone         @relation(fields: [pickupZoneId], references: [id])
+  members    PoolMember[]
+  events     RideEvent[]
+
+  @@index([driverId, status])
+  @@index([status, pickupZoneId])
+  @@map("pools")
+}
+
+model PoolMember {
+  id            String    @id @default(uuid()) @db.Uuid
+  poolId        String    @map("pool_id") @db.Uuid
+  rideRequestId String    @map("ride_request_id") @db.Uuid
+  seats         Int
+  joinedAt      DateTime  @default(now()) @map("joined_at")
+  leftAt        DateTime? @map("left_at")
+
+  pool        Pool        @relation(fields: [poolId], references: [id])
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id])
+
+  @@index([poolId])
+  @@map("pool_members")
+}
+
+model RideEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  rideRequestId String?  @map("ride_request_id") @db.Uuid
+  poolId        String?  @map("pool_id") @db.Uuid
+  actorId       String?  @map("actor_id") @db.Uuid
+  type          String
+  fromStatus    String?  @map("from_status")
+  toStatus      String?  @map("to_status")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  rideRequest RideRequest? @relation(fields: [rideRequestId], references: [id])
+  pool        Pool?        @relation(fields: [poolId], references: [id])
+  actor       User?        @relation(fields: [actorId], references: [id])
+
+  @@index([rideRequestId, createdAt])
+  @@index([poolId, createdAt])
+  @@map("ride_events")
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  rideRequestId String        @unique @map("ride_request_id") @db.Uuid
+  amountPaisa   Int           @map("amount_paisa")
+  method        PaymentMethod
+  status        PaymentStatus
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id])
+
+  @@map("payments")
 }
