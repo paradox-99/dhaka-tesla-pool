@@ -7,4 +7,5 @@ build/
 coverage/
 *.log
 .DS_Store
+**/src/generated/
 Dhaka_Tesla_Pool_PRD_Internship.md
