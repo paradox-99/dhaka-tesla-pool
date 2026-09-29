@@ -25,6 +25,11 @@ ridesRouter.get("/", validate(listRidesSchema, "query"), async (req, res) => {
   res.status(200).json(result);
 });
 
+ridesRouter.get("/active", async (req, res) => {
+  const ride = await ridesService.getActiveRide(req.user!.id);
+  res.status(200).json(ride);
+});
+
 ridesRouter.get("/:id", async (req, res) => {
   const ride = await ridesService.getRide(req.user!.id, req.params.id as string);
   res.status(200).json(ride);
