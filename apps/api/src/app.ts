@@ -9,6 +9,7 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { zonesRouter } from "./modules/zones/zones.routes.js";
 import { faresRouter } from "./modules/fares/fares.routes.js";
 import { ridesRouter } from "./modules/rides/rides.routes.js";
+import { driverRouter } from "./modules/driver/driver.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -27,6 +28,7 @@ export function createApp() {
   app.use("/api/zones", zonesRouter);
   app.use("/api/fares", faresRouter);
   app.use("/api/rides", ridesRouter);
+  app.use("/api/driver", driverRouter);
 
   app.use(notFound);
   app.use(errorHandler);
