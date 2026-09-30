@@ -15,6 +15,10 @@ type Zone = {
   y: number;
 };
 
+type ZonesResponse = {
+  zones: Zone[];
+};
+
 type FareEstimate = {
   distanceKm: number;
   soloFarePaisa: number;
@@ -58,7 +62,8 @@ export default function PassengerPage() {
     }
   }, [isReady, router, user]);
 
-  const { data: zones } = useSWR<Zone[]>("/api/zones", async () => apiFetch<Zone[]>("/api/zones"));
+  const { data: zonesResponse } = useSWR<ZonesResponse>("/api/zones", async () => apiFetch<ZonesResponse>("/api/zones"));
+  const zones = zonesResponse?.zones ?? [];
   const { data: activeRide, mutate: mutateActive, error: activeRideError } = useSWR<ActiveRide | null>(
     user ? "/api/rides/active" : null,
     async () => apiFetch<ActiveRide | null>("/api/rides/active"),
