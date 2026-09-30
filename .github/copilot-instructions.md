@@ -165,16 +165,16 @@ service. Every state change runs inside a transaction and writes a
   infrastructure (`AppError`, central error handler, `validate()`,
   zod-validated `config/env.ts`) and a dedicated `dhaka_tesla_pool_test`
   Postgres database for integration tests (`.env.test`, `vitest.setup.ts`).
-- ⬜ **Phase 4** `feature/fare-model`: `domain/zones.ts`, `domain/fare.ts`,
-  `domain/matching.ts`, `GET /api/zones`, `GET /api/fares/estimate`, unit
-  tests against the worked fare/distance examples above.
-- ⬜ **Phase 5** `feature/ride-requests` then `feature/tesla-pooling`: create/
-  list/cancel ride requests, auto-join matching, atomic seat claim, fare
-  recalculation, a concurrency test proving two simultaneous last-seat
-  claims can't overbook.
-- ⬜ **Phase 6** `feature/driver-flow`: online/offline, request feed, accept
+- ✅ **Phase 4** `feature/fare-model`: zone distance, fare calculation,
+  matching compatibility, `GET /api/zones`, `GET /api/fares/estimate`, and
+  unit tests against the worked fare/distance examples above.
+- ✅ **Phase 5** `feature/ride-requests` then `feature/tesla-pooling`: create/
+  list/cancel ride requests, active ride privacy summary, auto-join matching,
+  atomic seat claim, fare recalculation, and a real-Postgres concurrency test
+  proving two simultaneous last-seat claims can't overbook.
+- ✅ **Phase 6** `feature/driver-flow`: online/offline, request feed, accept
   (create/join pool), arrive/start/complete/cancel via the state machine,
-  payments on completion.
+  fare locking, and cash/TeslaPay payments on completion.
 - ⬜ **Phase 7** `feature/passenger-ui`, `feature/driver-ui`: the Next.js
   pages listed in `docs/architecture.md` — auth pages, passenger request +
   live status + history, driver dashboard + history. Every data view needs
